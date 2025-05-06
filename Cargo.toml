@@ -1,9 +1,20 @@
 [package]
 name = "squawkbox"
 authors = ["benny b <ben@bitcoinbay.foundation>"]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "DLC contract communication over nostr."
 license = "MIT"
 
 [dependencies]
+anyhow = "1.0.98"
+async-trait = "0.1.88"
+bitcoin = "0.32.5"
+ddk = { version = "0.0.17", features = ["nostr"] }
+ddk-manager = "0.7.5"
+dlc = "0.7.1"
+dlc-messages = "0.7.1"
+nostr = "0.40.0"
+nostr-sdk = "0.40.0"
+tokio = "1.44.2"
+tracing = "0.1.41"
