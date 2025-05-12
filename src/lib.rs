@@ -2,15 +2,13 @@ mod dlc;
 
 use std::sync::Arc;
 
-use bitcoin::Network;
-use bitcoin::bip32::Xpriv;
 use ddk::chain::EsploraClient;
 use ddk::nostr::messages::{create_dlc_msg_event, handle_dlc_msg_event};
 use ddk::wallet::DlcDevKitWallet;
 use ddk::{Oracle, Storage, Transport};
 use ddk_manager::{CachedContractSignerProvider, SimpleSigner, SystemTimeProvider};
 use nostr_sdk::{Client, RelayPoolNotification};
-use nostr_sdk::{Keys, Timestamp, Url, secp256k1::Secp256k1};
+use nostr_sdk::{Keys, Timestamp, Url};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
@@ -33,23 +31,14 @@ pub struct Squawkbox {
 }
 
 impl Squawkbox {
-    pub async fn new(
-        seed_bytes: &[u8; 32],
-        relay_host: &str,
-        network: Network,
-    ) -> anyhow::Result<Squawkbox> {
-        tracing::info!("Creating Nostr Dlc handler.");
-        let secp = Secp256k1::new();
-        let seed = Xpriv::new_master(network, seed_bytes)?;
-        let keys = Keys::new_with_ctx(&secp, seed.private_key.into());
-
+    pub async fn new(keys: &Keys, relay_host: &str) -> anyhow::Result<Squawkbox> {
         let relay_url = relay_host.parse()?;
         let client = Client::new(keys.clone());
         client.add_relay(&relay_url).await?;
         client.connect().await;
 
         Ok(Squawkbox {
-            keys,
+            keys: keys.clone(),
             relay_url,
             client,
         })
@@ -61,7 +50,7 @@ impl Squawkbox {
         manager: Arc<DlcDevKitDlcManager<S, O>>,
     ) -> JoinHandle<Result<(), anyhow::Error>> {
         tracing::info!(
-            pubkey = self.keys.public_key().to_string(),
+            nostr_pubkey = self.keys.public_key().to_string(),
             transport_public_key = self.public_key().to_string(),
             "Starting Nostr DLC listener."
         );

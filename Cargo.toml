@@ -1,7 +1,7 @@
 [package]
 name = "squawkbox"
 authors = ["benny b <ben@bitcoinbay.foundation>"]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "DLC contract communication over nostr."
 license = "MIT"
