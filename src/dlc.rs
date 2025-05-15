@@ -2,7 +2,7 @@ use crate::{DlcDevKitDlcManager, Squawkbox};
 use tokio::sync::watch;
 
 use async_trait::async_trait;
-use ddk::{Oracle, Storage, Transport, nostr};
+use ddk::{Oracle, Storage, Transport, error::TransportError, nostr};
 use dlc::secp256k1_zkp::PublicKey as BitcoinPublicKey;
 use dlc_messages::Message;
 use std::sync::Arc;
@@ -22,13 +22,13 @@ impl Transport for Squawkbox {
         &self,
         mut stop_signal: watch::Receiver<bool>,
         manager: Arc<DlcDevKitDlcManager<S, O>>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), TransportError> {
         let listen_handle = self.start(stop_signal.clone(), manager);
 
         // Wait for either task to complete or stop signal
         tokio::select! {
             _ = stop_signal.changed() => Ok(()),
-            res = listen_handle => res?,
+            res = listen_handle => res.map_err(|e| TransportError::Listen(e.to_string()))?,
         }
     }
     /// Send a message to a specific counterparty.

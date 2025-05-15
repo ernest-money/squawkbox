@@ -3,11 +3,14 @@ mod dlc;
 use std::sync::Arc;
 
 use ddk::chain::EsploraClient;
+use ddk::error::TransportError;
 use ddk::nostr::messages::{create_dlc_msg_event, handle_dlc_msg_event};
 use ddk::wallet::DlcDevKitWallet;
 use ddk::{Oracle, Storage, Transport};
 use ddk_manager::{CachedContractSignerProvider, SimpleSigner, SystemTimeProvider};
-use nostr_sdk::{Client, RelayPoolNotification};
+use nostr_relay_pool::relay::limits::{RelayEventLimits, RelayMessageLimits};
+use nostr_sdk::pool::RelayLimits;
+use nostr_sdk::{Client, Options, RelayPoolNotification};
 use nostr_sdk::{Keys, Timestamp, Url};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -33,7 +36,18 @@ pub struct Squawkbox {
 impl Squawkbox {
     pub async fn new(keys: &Keys, relay_host: &str) -> anyhow::Result<Squawkbox> {
         let relay_url = relay_host.parse()?;
-        let client = Client::new(keys.clone());
+        let mut event_limits = RelayEventLimits::default();
+        event_limits.max_size = Some(5242880);
+        let mut message_limits = RelayMessageLimits::default();
+        message_limits.max_size = Some(5242880);
+
+        let mut relay_limits = RelayLimits::default();
+        relay_limits.events = event_limits;
+        relay_limits.messages = message_limits;
+
+        let options = Options::new().relay_limits(relay_limits);
+
+        let client = Client::builder().signer(keys.clone()).opts(options).build();
         client.add_relay(&relay_url).await?;
         client.connect().await;
 
@@ -48,7 +62,7 @@ impl Squawkbox {
         &self,
         mut stop_signal: watch::Receiver<bool>,
         manager: Arc<DlcDevKitDlcManager<S, O>>,
-    ) -> JoinHandle<Result<(), anyhow::Error>> {
+    ) -> JoinHandle<Result<(), TransportError>> {
         tracing::info!(
             nostr_pubkey = self.keys.public_key().to_string(),
             transport_public_key = self.public_key().to_string(),
@@ -60,7 +74,10 @@ impl Squawkbox {
             let since = Timestamp::now();
             let msg_subscription =
                 ddk::nostr::messages::create_dlc_message_filter(since, keys.public_key());
-            nostr_client.subscribe(msg_subscription, None).await?;
+            nostr_client
+                .subscribe(msg_subscription, None)
+                .await
+                .map_err(|e| TransportError::Listen(e.to_string()))?;
             tracing::info!(
                 "Listening for messages on {}",
                 keys.public_key().to_string()
@@ -118,7 +135,7 @@ impl Squawkbox {
                     }
                 }
             }
-            Ok::<_, anyhow::Error>(())
+            Ok::<_, TransportError>(())
         })
     }
 }
